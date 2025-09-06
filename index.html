@@ -271,7 +271,7 @@
             ${b.category ? `<span class="pill">${escapeHtml(b.category)}</span>` : ""}
           </div>
           <div class="muted">by ${escapeHtml(b.author)}${b.year?` • ${escapeHtml(b.year)}`:""}</div>
-          <div class="muted" style="word-break:break-all;">${escapeHtml(b.url)}</div>
+          <div class="muted"><a href="${b.url}" target="_blank" rel="noopener noreferrer">📖 Book Link</a></div>
         </div>
         <div class="actions">
           <a class="btn small primary" href="${b.url}" target="_blank" rel="noopener noreferrer">⬇ Download</a>
