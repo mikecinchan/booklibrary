@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Book Library (Private)</title>
+<style>
+  :root{ --bg:#0f172a; --panel:#111827; --muted:#1f2937; --text:#e5e7eb; --text-dim:#9ca3af;
+         --accent:#22c55e; --accent-2:#3b82f6; --danger:#ef4444; --ring:#22c55e33; --radius:16px; }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+       background:linear-gradient(180deg,var(--bg),#0b1023);color:var(--text);-webkit-font-smoothing:antialiased}
+  .container{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .title{font-size:clamp(20px,3vw,28px);font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
+  .badge{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .panel{background:linear-gradient(180deg,var(--panel),#0e162e);border:1px solid #1f2a44;border-radius:var(--radius);box-shadow:0 10px 30px #0008,inset 0 1px 0 #ffffff14}
+
+  .controls{display:grid;grid-template-columns:1fr;gap:12px;padding:12px}
+  .controls-row{display:grid;grid-template-columns:1fr minmax(140px,200px);gap:12px}
+  @media (min-width:720px){.controls{grid-template-columns:1fr auto auto;align-items:center}.controls-row{grid-template-columns:1fr 200px}}
+  .searchbar{position:relative}
+  .searchbar input{width:100%;padding:12px 40px;border-radius:12px;background:var(--muted);border:1px solid #26324d;color:var(--text);outline:none}
+  .searchbar input:focus{border-color:var(--accent);box-shadow:0 0 0 6px var(--ring)}
+  .searchbar .icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.7;font-size:18px}
+  select,button,input[type="email"],input[type="password"]{height:44px;border-radius:12px;border:1px solid #26324d;background:var(--muted);color:var(--text);padding:0 12px;outline:none}
+  select:focus,button:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 6px var(--ring)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-weight:700;cursor:pointer}
+  .btn.primary{background:linear-gradient(90deg,var(--accent),#12a150);border-color:#1a7c45}
+  .btn.ghost{background:transparent}
+  .btn.small{height:36px;border-radius:10px;padding:0 10px;font-size:14px}
+
+  .form{padding:16px;display:grid;gap:12px}
+  .grid-2{display:grid;gap:12px;grid-template-columns:1fr}
+  @media (min-width:720px){.grid-2{grid-template-columns:1fr 1fr}}
+  .field{display:grid;gap:6px}
+  label{font-size:12px;color:var(--text-dim);letter-spacing:.3px}
+  input,.form select{width:100%;height:44px;border-radius:10px;padding:10px 12px;background:#0e1428;border:1px solid #243356;color:#e5e7eb}
+  input::placeholder{color:#6b7280}
+
+  .list{padding:12px;display:grid;gap:12px}
+  .empty{border:1px dashed #2a3a64;border-radius:12px;padding:24px;text-align:center;color:#94a3b8}
+  .card{display:grid;gap:8px;padding:14px;border:1px solid #233354;border-radius:14px;background:linear-gradient(180deg,#0f1a33,#0d152b)}
+  @media (min-width:700px){.card{grid-template-columns:1fr auto;align-items:center}}
+  .meta{display:grid;gap:4px}
+  .title-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .book-title{font-weight:800;letter-spacing:.2px}
+  .muted{color:#9ca3af;font-size:14px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;background:#122044;border:1px solid #223056;color:#c7d2fe}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .footer-note{color:#94a3b8;font-size:12px;text-align:center;padding:8px 0}
+
+  /* login layout */
+  .center{min-height:60vh;display:grid;place-items:center}
+  .login-card{max-width:420px;width:100%;padding:18px;border-radius:16px}
+  .msg{margin-top:10px;display:none}
+  .error{background:#7f1d1d;color:#fff;border-radius:10px;padding:8px 10px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title">📚 Book Library <span class="badge">Private</span></div>
+      <div class="muted">Sign in to access. (Email/Password)</div>
+    </header>
+
+    <!-- LOGIN PAGE -->
+    <section id="loginPage" class="center">
+      <div class="panel login-card">
+        <h3 style="margin:0 0 10px 0">Sign in</h3>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@domain.com" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+          <button id="loginBtn" class="btn primary">🔐 Sign in</button>
+        </div>
+        <div id="loginMsg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- APP PAGE -->
+    <section id="appPage" style="display:none;">
+      <!-- Controls -->
+      <div class="panel controls">
+        <div class="controls-row">
+          <div class="searchbar">
+            <span class="icon">🔎</span>
+            <input id="searchInput" type="search" placeholder="Search by title, author, category, or year…" />
+          </div>
+          <select id="categoryFilter" title="Filter by category"></select>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn primary" id="toggleFormBtn">➕ Add Book</button>
+          <span id="authInfo" class="muted"></span>
+          <button id="logoutBtn" class="btn ghost">🚪 Sign out</button>
+        </div>
+      </div>
+
+      <!-- Add Book Form -->
+      <div class="panel" id="formPanel" style="display:none;">
+        <form id="bookForm" class="form" novalidate>
+          <div class="grid-2">
+            <div class="field">
+              <label for="title">Title <span class="pill">Required</span></label>
+              <input id="title" name="title" placeholder="e.g., Clean Code" required />
+            </div>
+            <div class="field">
+              <label for="author">Author <span class="pill">Required</span></label>
+              <input id="author" name="author" placeholder="e.g., Robert C. Martin" required />
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="category">Category</label>
+              <input id="category" name="category" placeholder="e.g., Programming" />
+            </div>
+            <div class="field">
+              <label for="year">Published Year</label>
+              <input id="year" name="year" inputmode="numeric" pattern="\\d{4}" placeholder="e.g., 2008" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="url">Book Downloadable URL <span class="pill">Required</span></label>
+            <input id="url" name="url" placeholder="https://example.com/path/to/book.pdf" required />
+            <div class="hint">The file is hosted elsewhere; we only store the link.</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn primary" type="submit">💾 Save Book</button>
+            <button class="btn" type="button" id="cancelForm">✖ Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- List -->
+      <div class="panel list" id="listPanel">
+        <div class="empty" id="emptyState">No books yet. Add one to get started.</div>
+        <div id="cards"></div>
+      </div>
+
+      <div class="footer-note">Private app — reads & writes require sign-in.</div>
+    </section>
+  </div>
+
+<!-- Firebase (modular v11) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import {
+    getAuth, setPersistence, browserLocalPersistence,
+    signInWithEmailAndPassword, signOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  import {
+    getFirestore, collection, addDoc, deleteDoc, doc,
+    onSnapshot, query as fsQuery, orderBy, serverTimestamp, enableIndexedDbPersistence
+  } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+       apiKey: "AIzaSyAX-EzgH83W61LhAfjkpAoM9f0LfAFyAdc",
+       authDomain: "booklibrary-8eab9.firebaseapp.com",
+       projectId: "booklibrary-8eab9",
+       storageBucket: "booklibrary-8eab9.firebasestorage.app",
+       messagingSenderId: "370524170249",
+       appId: "1:370524170249:web:886ca9671202752e7370d8"
+  };
+
+  // ---- Init ----
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+  enableIndexedDbPersistence(db).catch(()=>{});
+  setPersistence(auth, browserLocalPersistence);
+
+  // ---- Screen toggles ----
+  const loginPage = document.getElementById("loginPage");
+  const appPage   = document.getElementById("appPage");
+  function showLogin(){ loginPage.style.display="grid"; appPage.style.display="none"; }
+  function showApp(){   loginPage.style.display="none"; appPage.style.display="block"; }
+
+  // ---- Auth (Email/Password) ----
+  const emailEl = document.getElementById("email");
+  const passEl  = document.getElementById("password");
+  const loginBtn= document.getElementById("loginBtn");
+  const logoutBtn= document.getElementById("logoutBtn");
+  const authInfo= document.getElementById("authInfo");
+  const loginMsg= document.getElementById("loginMsg");
+  const toggleFormBtn = document.getElementById("toggleFormBtn");
+
+  let unsubscribeBooks = null; // attach after login
+
+  function showError(msg){ loginMsg.className="msg error"; loginMsg.textContent=msg; loginMsg.style.display="block"; }
+
+  async function attachBooksListener(){
+    if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
+    const booksRef = collection(db, "books");
+    const q = fsQuery(booksRef, orderBy("createdAt", "desc"));
+    unsubscribeBooks = onSnapshot(q, (snap)=>{
+      books = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      rebuildCategoryFilter(); renderList();
+    });
+  }
+
+  loginBtn.addEventListener("click", async ()=>{
+    try{
+      loginMsg.style.display="none";
+      const email = emailEl.value.trim();
+      const pw = passEl.value;
+      if(!email || !pw) return showError("Enter your email and password.");
+      const { user } = await signInWithEmailAndPassword(auth, email, pw);
+      passEl.value="";
+      authInfo.textContent = `Signed in as ${user.email}`;
+      showApp();
+      await attachBooksListener(); // reads require auth
+    }catch(e){ console.error(e); showError("Sign-in failed. Check your credentials or if the user exists in Firebase Auth."); }
+  });
+
+  logoutBtn.addEventListener("click", async ()=>{
+    if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
+    await signOut(auth);
+    showLogin();
+  });
+
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      authInfo.textContent = `Signed in as ${user.email}`;
+      showApp();
+      await attachBooksListener();
+    }else{
+      if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
+      showLogin();
+    }
+  });
+
+  // ---- Library UI ----
+  let books = []; let queryStr=""; let categoryFilter="All";
+  const $ = sel => document.querySelector(sel);
+  function normalize(s){ return (s||"").toString().toLowerCase().trim(); }
+  function escapeHtml(str){ return (str??"").toString()
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+  function uniqueCategories(list){ const set=new Set(); list.forEach(b=>{ if(b.category&&b.category.trim()) set.add(b.category.trim()); });
+    return ["All", ...Array.from(set).sort((a,b)=>a.localeCompare(b))]; }
+  function filteredBooks(){
+    const q = normalize(queryStr);
+    return books.filter(b=>{
+      const matchesQ = !q || [b.title,b.author,b.category,b.year].some(v => (v+"").toLowerCase().includes(q));
+      const matchesCat = categoryFilter==="All" || normalize(b.category)===normalize(categoryFilter);
+      return matchesQ && matchesCat;
+    }).sort((a,b)=> a.title.localeCompare(b.title));
+  }
+  function rebuildCategoryFilter(){
+    const sel = document.getElementById("categoryFilter");
+    const cats = uniqueCategories(books);
+    sel.innerHTML = cats.map(c=>`<option value="${c}">${c}</option>`).join("");
+    sel.value = categoryFilter;
+  }
+  function renderList(){
+    const cardsEl = document.getElementById("cards");
+    const emptyEl = document.getElementById("emptyState");
+    const list = filteredBooks();
+    cardsEl.innerHTML = ""; emptyEl.style.display = list.length ? "none" : "block";
+    list.forEach((b)=>{
+      const card = document.createElement("div"); card.className="card";
+      card.innerHTML = `
+        <div class="meta">
+          <div class="title-row">
+            <div class="book-title">${escapeHtml(b.title)}</div>
+            ${b.category ? `<span class="pill">${escapeHtml(b.category)}</span>` : ""}
+          </div>
+          <div class="muted">by ${escapeHtml(b.author)}${b.year?` • ${escapeHtml(b.year)}`:""}</div>
+          <div class="muted" style="word-break:break-all;">${escapeHtml(b.url)}</div>
+        </div>
+        <div class="actions">
+          <a class="btn small primary" href="${b.url}" target="_blank" rel="noopener noreferrer">⬇ Download</a>
+          <button class="btn small" data-action="copy" data-id="${b.id}">📋 Copy URL</button>
+          <button class="btn small" data-action="remove" data-id="${b.id}" title="Remove this book">🗑 Remove</button>
+        </div>`;
+      cardsEl.appendChild(card);
+    });
+  }
+
+  // Search / Filter
+  document.getElementById("searchInput").addEventListener("input", debounce(e=>{ queryStr=e.target.value; renderList(); },120));
+  document.getElementById("categoryFilter").addEventListener("change", e=>{ categoryFilter=e.target.value; renderList(); });
+
+  // Add form toggle
+  const formPanel = document.getElementById("formPanel");
+  document.getElementById("toggleFormBtn").addEventListener("click", ()=>{ formPanel.style.display = formPanel.style.display==="none" ? "block" : "none"; });
+  document.getElementById("cancelForm").addEventListener("click", ()=>{ document.getElementById("bookForm").reset(); formPanel.style.display="none"; });
+
+  // Add book
+  document.getElementById("bookForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const form = e.target;
+    const title=form.title.value.trim(), author=form.author.value.trim(), category=form.category.value.trim();
+    const year=form.year.value.trim(), url=form.url.value.trim();
+    if(!title||!author||!url) return alert("Please fill Title, Author, and URL.");
+    if(!/^https?:\/\//i.test(url) && !confirm("URL does not look like http(s). Save anyway?")) return;
+    if(year && !/^\d{4}$/.test(year)) return alert("Year must be 4 digits (e.g., 2021) or leave blank.");
+    try{
+      await addDoc(collection(db, "books"), { title, author, category, year, url, createdAt: serverTimestamp() });
+      form.reset(); formPanel.style.display="none";
+    }catch(err){ console.error(err); alert("Save failed. Are you signed in and do rules allow writes?"); }
+  });
+
+  // Copy / Remove
+  document.getElementById("cards").addEventListener("click", async (e)=>{
+    const btn = e.target.closest("button"); if(!btn) return;
+    const action = btn.getAttribute("data-action"); const id = btn.getAttribute("data-id");
+    const book = books.find(b=>b.id===id); if(!book) return;
+    if(action==="copy"){
+      try{ await navigator.clipboard.writeText(book.url); btn.textContent="✅ Copied!"; setTimeout(()=>btn.textContent="📋 Copy URL",1200); }
+      catch{ alert("Copy failed. You can select and copy the URL manually."); }
+    }else if(action==="remove"){
+      if(confirm(`Remove “${book.title}”?`)){
+        try{ await deleteDoc(doc(db,"books",id)); }catch(err){ console.error(err); alert("Delete failed. Check rules."); }
+      }
+    }
+  });
+
+  // Utils
+  function debounce(fn, wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; }
+</script>
+</body>
+</html>
