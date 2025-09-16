@@ -101,9 +101,11 @@
         </div>
       </div>
 
-      <!-- Add Book Form -->
+      <!-- Add/Edit Book Form -->
       <div class="panel" id="formPanel" style="display:none;">
         <form id="bookForm" class="form" novalidate>
+          <!-- used to know when we are editing -->
+          <input type="hidden" id="editId" />
           <div class="grid-2">
             <div class="field">
               <label for="title">Title <span class="pill">Required</span></label>
@@ -130,7 +132,7 @@
             <div class="hint">The file is hosted elsewhere; we only store the link.</div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn primary" type="submit">💾 Save Book</button>
+            <button class="btn primary" type="submit" id="saveBtn">💾 Save Book</button>
             <button class="btn" type="button" id="cancelForm">✖ Cancel</button>
           </div>
         </form>
@@ -154,7 +156,7 @@
     signInWithEmailAndPassword, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, deleteDoc, doc,
+    getFirestore, collection, addDoc, deleteDoc, doc, updateDoc,
     onSnapshot, query as fsQuery, orderBy, serverTimestamp, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
@@ -187,7 +189,6 @@
   const logoutBtn= document.getElementById("logoutBtn");
   const authInfo= document.getElementById("authInfo");
   const loginMsg= document.getElementById("loginMsg");
-  const toggleFormBtn = document.getElementById("toggleFormBtn");
 
   let unsubscribeBooks = null; // attach after login
 
@@ -276,6 +277,7 @@
         <div class="actions">
           <a class="btn small primary" href="${b.url}" target="_blank" rel="noopener noreferrer">⬇ Download</a>
           <button class="btn small" data-action="copy" data-id="${b.id}">📋 Copy URL</button>
+          <button class="btn small" data-action="edit" data-id="${b.id}">✏️ Edit</button>
           <button class="btn small" data-action="remove" data-id="${b.id}" title="Remove this book">🗑 Remove</button>
         </div>`;
       cardsEl.appendChild(card);
@@ -286,31 +288,59 @@
   document.getElementById("searchInput").addEventListener("input", debounce(e=>{ queryStr=e.target.value; renderList(); },120));
   document.getElementById("categoryFilter").addEventListener("change", e=>{ categoryFilter=e.target.value; renderList(); });
 
-  // Add form toggle
+  // Add/Edit form toggle
   const formPanel = document.getElementById("formPanel");
-  document.getElementById("toggleFormBtn").addEventListener("click", ()=>{ formPanel.style.display = formPanel.style.display==="none" ? "block" : "none"; });
-  document.getElementById("cancelForm").addEventListener("click", ()=>{ document.getElementById("bookForm").reset(); formPanel.style.display="none"; });
+  const saveBtn   = document.getElementById("saveBtn");
+  document.getElementById("toggleFormBtn").addEventListener("click", ()=>{
+    enterCreateMode(); formPanel.style.display = "block";
+  });
+  document.getElementById("cancelForm").addEventListener("click", ()=>{
+    document.getElementById("bookForm").reset(); enterCreateMode(); formPanel.style.display="none";
+  });
 
-  // Add book
+  // Create or Update
   document.getElementById("bookForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
     const form = e.target;
+    const editId = document.getElementById("editId").value || null;
     const title=form.title.value.trim(), author=form.author.value.trim(), category=form.category.value.trim();
     const year=form.year.value.trim(), url=form.url.value.trim();
     if(!title||!author||!url) return alert("Please fill Title, Author, and URL.");
     if(!/^https?:\/\//i.test(url) && !confirm("URL does not look like http(s). Save anyway?")) return;
     if(year && !/^\d{4}$/.test(year)) return alert("Year must be 4 digits (e.g., 2021) or leave blank.");
+
     try{
-      await addDoc(collection(db, "books"), { title, author, category, year, url, createdAt: serverTimestamp() });
-      form.reset(); formPanel.style.display="none";
-    }catch(err){ console.error(err); alert("Save failed. Are you signed in and do rules allow writes?"); }
+      if(editId){
+        await updateDoc(doc(db, "books", editId), { title, author, category, year, url, updatedAt: serverTimestamp() });
+      }else{
+        await addDoc(collection(db, "books"), { title, author, category, year, url, createdAt: serverTimestamp() });
+      }
+      form.reset(); enterCreateMode(); formPanel.style.display="none";
+    }catch(err){ console.error(err); alert(editId ? "Update failed. Check permissions." : "Save failed. Check permissions."); }
   });
 
-  // Copy / Remove
+  function enterCreateMode(){
+    document.getElementById("editId").value = "";
+    saveBtn.textContent = "💾 Save Book";
+  }
+  function enterEditMode(book){
+    document.getElementById("editId").value = book.id;
+    document.getElementById("title").value = book.title || "";
+    document.getElementById("author").value = book.author || "";
+    document.getElementById("category").value = book.category || "";
+    document.getElementById("year").value = book.year || "";
+    document.getElementById("url").value = book.url || "";
+    saveBtn.textContent = "✅ Update Book";
+    formPanel.style.display = "block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Copy / Edit / Remove
   document.getElementById("cards").addEventListener("click", async (e)=>{
     const btn = e.target.closest("button"); if(!btn) return;
     const action = btn.getAttribute("data-action"); const id = btn.getAttribute("data-id");
     const book = books.find(b=>b.id===id); if(!book) return;
+
     if(action==="copy"){
       try{ await navigator.clipboard.writeText(book.url); btn.textContent="✅ Copied!"; setTimeout(()=>btn.textContent="📋 Copy URL",1200); }
       catch{ alert("Copy failed. You can select and copy the URL manually."); }
@@ -318,6 +348,8 @@
       if(confirm(`Remove “${book.title}”?`)){
         try{ await deleteDoc(doc(db,"books",id)); }catch(err){ console.error(err); alert("Delete failed. Check rules."); }
       }
+    }else if(action==="edit"){
+      enterEditMode(book);
     }
   });
 
