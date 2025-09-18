@@ -9,7 +9,7 @@
          --accent:#22c55e; --accent-2:#3b82f6; --danger:#ef4444; --ring:#22c55e33; --radius:16px; }
   *{box-sizing:border-box} html,body{height:100%}
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-       background:linear-gradient(180deg,var(--bg),#0b1023);color:var(--text);-webkit-font-smoothing:antialiased}
+       background:linear-gradient(180deg,var(--bg),#0b1023);color:#e5e7eb;-webkit-font-smoothing:antialiased}
   .container{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
   header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .title{font-size:clamp(20px,3vw,28px);font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
@@ -20,10 +20,10 @@
   .controls-row{display:grid;grid-template-columns:1fr minmax(140px,200px);gap:12px}
   @media (min-width:720px){.controls{grid-template-columns:1fr auto auto;align-items:center}.controls-row{grid-template-columns:1fr 200px}}
   .searchbar{position:relative}
-  .searchbar input{width:100%;padding:12px 40px;border-radius:12px;background:var(--muted);border:1px solid #26324d;color:var(--text);outline:none}
+  .searchbar input{width:100%;padding:12px 40px;border-radius:12px;background:var(--muted);border:1px solid #26324d;color:#e5e7eb;outline:none}
   .searchbar input:focus{border-color:var(--accent);box-shadow:0 0 0 6px var(--ring)}
   .searchbar .icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.7;font-size:18px}
-  select,button,input[type="email"],input[type="password"]{height:44px;border-radius:12px;border:1px solid #26324d;background:var(--muted);color:var(--text);padding:0 12px;outline:none}
+  select,button,input[type="email"],input[type="password"]{height:44px;border-radius:12px;border:1px solid #26324d;background:var(--muted);color:#e5e7eb;padding:0 12px;outline:none}
   select:focus,button:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 6px var(--ring)}
   .btn{display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-weight:700;cursor:pointer}
   .btn.primary{background:linear-gradient(90deg,var(--accent),#12a150);border-color:#1a7c45}
@@ -50,7 +50,11 @@
   .actions{display:flex;gap:8px;flex-wrap:wrap}
   .footer-note{color:#94a3b8;font-size:12px;text-align:center;padding:8px 0}
 
-  /* login layout */
+  /* pager */
+  .pager{display:flex;align-items:center;justify-content:space-between;padding:8px 12px}
+  .pager .btn[disabled]{opacity:.5;cursor:not-allowed}
+
+  /* login */
   .center{min-height:60vh;display:grid;place-items:center}
   .login-card{max-width:420px;width:100%;padding:18px;border-radius:16px}
   .msg{margin-top:10px;display:none}
@@ -104,7 +108,6 @@
       <!-- Add/Edit Book Form -->
       <div class="panel" id="formPanel" style="display:none;">
         <form id="bookForm" class="form" novalidate>
-          <!-- used to know when we are editing -->
           <input type="hidden" id="editId" />
           <div class="grid-2">
             <div class="field">
@@ -142,6 +145,12 @@
       <div class="panel list" id="listPanel">
         <div class="empty" id="emptyState">No books yet. Add one to get started.</div>
         <div id="cards"></div>
+        <!-- pager -->
+        <div id="pager" class="pager" style="display:none;">
+          <button id="prevPage" class="btn small">◀ Prev</button>
+          <span id="pageInfo" class="muted">Page 1</span>
+          <button id="nextPage" class="btn small">Next ▶</button>
+        </div>
       </div>
 
       <div class="footer-note">Private app — reads & writes require sign-in.</div>
@@ -156,8 +165,9 @@
     signInWithEmailAndPassword, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, deleteDoc, doc, updateDoc,
-    onSnapshot, query as fsQuery, orderBy, serverTimestamp, enableIndexedDbPersistence
+    getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, getDocs,
+    query as fsQuery, orderBy, serverTimestamp, enableIndexedDbPersistence,
+    where, startAt, endAt, limit, startAfter
   } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -182,7 +192,7 @@
   function showLogin(){ loginPage.style.display="grid"; appPage.style.display="none"; }
   function showApp(){   loginPage.style.display="none"; appPage.style.display="block"; }
 
-  // ---- Auth (Email/Password) ----
+  // ---- Auth ----
   const emailEl = document.getElementById("email");
   const passEl  = document.getElementById("password");
   const loginBtn= document.getElementById("loginBtn");
@@ -190,19 +200,7 @@
   const authInfo= document.getElementById("authInfo");
   const loginMsg= document.getElementById("loginMsg");
 
-  let unsubscribeBooks = null; // attach after login
-
   function showError(msg){ loginMsg.className="msg error"; loginMsg.textContent=msg; loginMsg.style.display="block"; }
-
-  async function attachBooksListener(){
-    if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
-    const booksRef = collection(db, "books");
-    const q = fsQuery(booksRef, orderBy("createdAt", "desc"));
-    unsubscribeBooks = onSnapshot(q, (snap)=>{
-      books = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      rebuildCategoryFilter(); renderList();
-    });
-  }
 
   loginBtn.addEventListener("click", async ()=>{
     try{
@@ -214,12 +212,13 @@
       passEl.value="";
       authInfo.textContent = `Signed in as ${user.email}`;
       showApp();
-      await attachBooksListener(); // reads require auth
+      await refreshAllCategories();      // NEW: load all categories once
+      resetPagination();
+      await runSearchHybrid();           // initial load
     }catch(e){ console.error(e); showError("Sign-in failed. Check your credentials or if the user exists in Firebase Auth."); }
   });
 
   logoutBtn.addEventListener("click", async ()=>{
-    if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
     await signOut(auth);
     showLogin();
   });
@@ -228,41 +227,172 @@
     if(user){
       authInfo.textContent = `Signed in as ${user.email}`;
       showApp();
-      await attachBooksListener();
+      await refreshAllCategories();      // NEW
+      resetPagination();
+      await runSearchHybrid();
     }else{
-      if (unsubscribeBooks) { unsubscribeBooks(); unsubscribeBooks = null; }
       showLogin();
     }
   });
 
-  // ---- Library UI ----
-  let books = []; let queryStr=""; let categoryFilter="All";
+  // ---- State + pagination ----
+  let allCategories = ["All"];           // NEW: cache of all categories
+  let booksAll = [];                     // full set (client-paged modes)
+  let booksPage = [];                    // current page to render
+  let queryStr = "";
+  let categoryFilter = "all";
+
+  const PAGE_SIZE = 25;
+  let page = 1;
+  let modeKey = "";      // 'all+empty' | 'all+query' | 'category'
+  let cursors = [];      // last doc of each server-paged page
+  let hasNext = false;
+
   const $ = sel => document.querySelector(sel);
   function normalize(s){ return (s||"").toString().toLowerCase().trim(); }
   function escapeHtml(str){ return (str??"").toString()
     .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
     .replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
-  function uniqueCategories(list){ const set=new Set(); list.forEach(b=>{ if(b.category&&b.category.trim()) set.add(b.category.trim()); });
-    return ["All", ...Array.from(set).sort((a,b)=>a.localeCompare(b))]; }
-  function filteredBooks(){
-    const q = normalize(queryStr);
-    return books.filter(b=>{
-      const matchesQ = !q || [b.title,b.author,b.category,b.year].some(v => (v+"").toLowerCase().includes(q));
-      const matchesCat = categoryFilter==="All" || normalize(b.category)===normalize(categoryFilter);
-      return matchesQ && matchesCat;
-    }).sort((a,b)=> a.title.localeCompare(b.title));
+
+  function containsMatch(book, q) {
+    const s = (q || "").toLowerCase().trim();
+    if (!s) return true;
+    return [book.title, book.author, book.category, book.year]
+      .some(v => (v ?? "").toString().toLowerCase().includes(s));
   }
-  function rebuildCategoryFilter(){
+
+  function resetPagination(){ page=1; cursors=[]; hasNext=false; }
+  function setMode(key){ if (modeKey !== key){ modeKey=key; resetPagination(); } }
+
+  function applyClientPaging(list){
+    booksAll = list.slice();
+    const total = booksAll.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    const start = (page - 1) * PAGE_SIZE;
+    booksPage = booksAll.slice(start, start + PAGE_SIZE);
+    hasNext = page < totalPages;
+    updatePager({ total, totalPages, serverPaged:false });
+  }
+
+  function updatePager({ total=null, totalPages=null, serverPaged }){
+    const pager = $("#pager");
+    const info  = $("#pageInfo");
+    const prevB = $("#prevPage");
+    const nextB = $("#nextPage");
+    pager.style.display = (serverPaged || booksAll.length > PAGE_SIZE || page>1) ? "flex" : "none";
+    if (serverPaged){
+      info.textContent = `Page ${page}`;
+      prevB.disabled = (page === 1);
+      nextB.disabled = !hasNext;
+    } else {
+      info.textContent = total != null ? `Page ${page} of ${totalPages} • ${total} results` : `Page ${page}`;
+      prevB.disabled = (page === 1);
+      nextB.disabled = !hasNext;
+    }
+  }
+
+  $("#prevPage").addEventListener("click", async ()=>{
+    if (page === 1) return;
+    page--;
+    await runSearchHybrid(true);
+  });
+  $("#nextPage").addEventListener("click", async ()=>{
+    if (!hasNext) return;
+    page++;
+    await runSearchHybrid(true);
+  });
+
+  // ---- Load ALL categories once (for dropdown) ----
+  async function refreshAllCategories(){
+    const booksRef = collection(db, "books");
+    // orderBy(categoryLower) → full scan but small payload (only categories)
+    const snap = await getDocs(fsQuery(booksRef, orderBy("categoryLower")));
+    const set = new Set();
+    snap.docs.forEach(d=>{
+      const b = d.data();
+      const c = (b.category || "").trim();
+      if (c) set.add(c);  // keep original case for label
+    });
+    allCategories = ["All", ...Array.from(set).sort((a,b)=>a.localeCompare(b))];
+    renderCategoryDropdown();            // draw menu
+  }
+
+  function renderCategoryDropdown(){
     const sel = document.getElementById("categoryFilter");
-    const cats = uniqueCategories(books);
-    sel.innerHTML = cats.map(c=>`<option value="${c}">${c}</option>`).join("");
-    sel.value = categoryFilter;
+    const prev = categoryFilter;         // lowercase like "all" or "fantasy"
+    sel.innerHTML = allCategories.map(c=>{
+      const val = c.toLowerCase();
+      return `<option value="${val}">${c}</option>`;
+    }).join("");
+    sel.value = prev;
   }
+
+  // ---- Hybrid search + pagination ----
+  async function runSearchHybrid(preservePage=false){
+    const q = normalize(queryStr);
+    const catVal = categoryFilter;      // 'all' or category value (lowercase)
+    const catLower = normalize(categoryFilter);
+    const booksRef = collection(db, "books");
+
+    const key = (catVal === "all") ? (q ? "all+query" : "all+empty") : "category";
+    if (!preservePage) setMode(key); else modeKey = key;
+
+    // 1) All + empty -> server-side paging
+    if (modeKey === "all+empty"){
+      let qRef = fsQuery(booksRef, orderBy("createdAt","desc"), limit(PAGE_SIZE));
+      if (page > 1 && cursors[page-2]) {
+        qRef = fsQuery(booksRef, orderBy("createdAt","desc"), startAfter(cursors[page-2]), limit(PAGE_SIZE));
+      }
+      const snap = await getDocs(qRef);
+      const docs = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      booksPage = docs;
+      hasNext = docs.length === PAGE_SIZE;
+      if (docs.length) cursors[page-1] = snap.docs[snap.docs.length - 1];
+      booksAll = docs; // small cache for category badges rendering only
+      renderCategoryDropdown();          // use ALL categories, not page-derived
+      updatePager({ serverPaged:true });
+      renderList();
+      return;
+    }
+
+    // 2) Category selected -> fetch category, contains filter, client-page
+    if (modeKey === "category"){
+      const snap = await getDocs(fsQuery(booksRef, where("categoryLower","==", catLower)));
+      const allInCat = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      const filtered = allInCat
+        .filter(b => containsMatch(b, q))
+        .sort((a,b)=> (a.title||"").localeCompare(b.title||""));
+      applyClientPaging(filtered);
+      renderCategoryDropdown();
+      renderList();
+      return;
+    }
+
+    // 3) All + query -> prefix across fields, merge, client-page
+    const start = q, end = q + "\uf8ff";
+    const fetchPrefix = async (field) => {
+      const snap = await getDocs(fsQuery(booksRef, orderBy(field), startAt(start), endAt(end)));
+      return snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    };
+    const fields = ["titleLower", "authorLower", "yearStr"]; // skip categoryLower (redundant)
+    const results = await Promise.all(fields.map(fetchPrefix));
+    const dedup = new Map();
+    results.flat().forEach(doc => dedup.set(doc.id, doc));
+    const merged = Array.from(dedup.values())
+      .sort((a,b)=> (a.title||"").localeCompare(b.title||""));
+    applyClientPaging(merged);
+    renderCategoryDropdown();
+    renderList();
+  }
+
+  // ---- Render list
   function renderList(){
     const cardsEl = document.getElementById("cards");
     const emptyEl = document.getElementById("emptyState");
-    const list = filteredBooks();
-    cardsEl.innerHTML = ""; emptyEl.style.display = list.length ? "none" : "block";
+    const list = booksPage;
+    cardsEl.innerHTML = "";
+    emptyEl.style.display = list.length ? "none" : "block";
     list.forEach((b)=>{
       const card = document.createElement("div"); card.className="card";
       card.innerHTML = `
@@ -284,11 +414,13 @@
     });
   }
 
-  // Search / Filter
-  document.getElementById("searchInput").addEventListener("input", debounce(e=>{ queryStr=e.target.value; renderList(); },120));
-  document.getElementById("categoryFilter").addEventListener("change", e=>{ categoryFilter=e.target.value; renderList(); });
+  // ---- Inputs → search (reset page)
+  document.getElementById("searchInput").addEventListener("input",
+    debounce(async e=>{ queryStr=e.target.value; resetPagination(); await runSearchHybrid(); }, 250));
+  document.getElementById("categoryFilter").addEventListener("change",
+    async e=>{ categoryFilter=e.target.value; resetPagination(); await runSearchHybrid(); });
 
-  // Add/Edit form toggle
+  // ---- Add/Edit form
   const formPanel = document.getElementById("formPanel");
   const saveBtn   = document.getElementById("saveBtn");
   document.getElementById("toggleFormBtn").addEventListener("click", ()=>{
@@ -298,7 +430,6 @@
     document.getElementById("bookForm").reset(); enterCreateMode(); formPanel.style.display="none";
   });
 
-  // Create or Update
   document.getElementById("bookForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
     const form = e.target;
@@ -309,13 +440,24 @@
     if(!/^https?:\/\//i.test(url) && !confirm("URL does not look like http(s). Save anyway?")) return;
     if(year && !/^\d{4}$/.test(year)) return alert("Year must be 4 digits (e.g., 2021) or leave blank.");
 
+    const payload = {
+      title, author, category, year, url,
+      titleLower: title.toLowerCase(),
+      authorLower: author.toLowerCase(),
+      categoryLower: (category||"").toLowerCase(),
+      yearStr: (year||"").toString().toLowerCase()
+    };
+
     try{
       if(editId){
-        await updateDoc(doc(db, "books", editId), { title, author, category, year, url, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "books", editId), { ...payload, updatedAt: serverTimestamp() });
       }else{
-        await addDoc(collection(db, "books"), { title, author, category, year, url, createdAt: serverTimestamp() });
+        await addDoc(collection(db, "books"), { ...payload, createdAt: serverTimestamp() });
       }
       form.reset(); enterCreateMode(); formPanel.style.display="none";
+      await refreshAllCategories();      // NEW: refresh dropdown options after write
+      resetPagination();
+      await runSearchHybrid();
     }catch(err){ console.error(err); alert(editId ? "Update failed. Check permissions." : "Save failed. Check permissions."); }
   });
 
@@ -339,21 +481,26 @@
   document.getElementById("cards").addEventListener("click", async (e)=>{
     const btn = e.target.closest("button"); if(!btn) return;
     const action = btn.getAttribute("data-action"); const id = btn.getAttribute("data-id");
-    const book = books.find(b=>b.id===id); if(!book) return;
+    const book = booksPage.find(b=>b.id===id) || booksAll.find(b=>b.id===id);
+    if(!book) return;
 
     if(action==="copy"){
       try{ await navigator.clipboard.writeText(book.url); btn.textContent="✅ Copied!"; setTimeout(()=>btn.textContent="📋 Copy URL",1200); }
       catch{ alert("Copy failed. You can select and copy the URL manually."); }
     }else if(action==="remove"){
       if(confirm(`Remove “${book.title}”?`)){
-        try{ await deleteDoc(doc(db,"books",id)); }catch(err){ console.error(err); alert("Delete failed. Check rules."); }
+        try{
+          await deleteDoc(doc(db,"books",id));
+          await refreshAllCategories();  // NEW: keep dropdown in sync after delete
+          resetPagination();
+          await runSearchHybrid();
+        }catch(err){ console.error(err); alert("Delete failed. Check rules."); }
       }
     }else if(action==="edit"){
       enterEditMode(book);
     }
   });
 
-  // Utils
   function debounce(fn, wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; }
 </script>
 </body>
